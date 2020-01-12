@@ -5,25 +5,9 @@ import battlecode.common.*;
 
 public strictfp class RobotPlayer {
     static RobotController rc;
-    static boolean foundSoup = false;
     static boolean initialized = true;
-    static boolean miningSoup = false;
-    static boolean onWay = false;
-    static MapLocation soupLocation;
-    static MapLocation nextSoupLocation;
-    static MapLocation currentLocation;
-    static MapLocation HQ_location;
-    static MapLocation nearestRefineryLocation;
     static Integer[][] soupMap;
-    static int nextSoupAmount = 0;
     static short builtMinersCount = 0;
-    static int directionMoveTries = 0;
-    static int directionMoveTimes = 0;
-    static int rotationCount = 0;
-    static boolean turnRight = true;
-    static boolean movePerp = false;
-    static Direction initialSearchDirection = Direction.NORTHEAST;
-    static Direction[] cardinal = { Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST,};
     static Direction[] adjDirections = { Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST,
                                         Direction.NORTHEAST, Direction.NORTHWEST, Direction.SOUTHEAST, Direction.SOUTHWEST};
 
