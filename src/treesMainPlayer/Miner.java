@@ -6,7 +6,7 @@ public strictfp class Miner {
     static RobotController rc;
     static boolean initialized = true;
     static boolean miningSoup = false;
-    static boolean onWay = false;
+    static boolean onWayToHq = false;
     static MapLocation soupLocation;
     static MapLocation nextSoupLocation;
     static MapLocation currentLocation;
@@ -16,10 +16,17 @@ public strictfp class Miner {
     static int directionMoveTries = 0;
     static int directionMoveTimes = 0;
     static int rotationCount = 0;
+    static int maxDistanceToRefinery = 64;
     static boolean turnRight = true;
     static boolean movePerp = false;
     static Direction initialSearchDirection = Direction.NORTHEAST;
-
+    
+    /**
+     * Runs the miner code
+     *
+     * @param rc The RobotController that is the miner
+     * @throws GameActionException
+     */
     static void runMiner(RobotController rc) throws GameActionException {
         Miner.rc = rc;
         if (initialized) {
@@ -30,6 +37,11 @@ public strictfp class Miner {
         }
     }
 
+    /**
+     * Miner code that runs once, only when it is created
+     *
+     * @throws GameActionException
+     */    
     static void minerInitialize() throws GameActionException{
         setHqLocation();
         updateCurrentLocation();
@@ -37,14 +49,19 @@ public strictfp class Miner {
         minerExecute();
     }
 
+    /**
+     * Miner code that runs continuously. Miner will search for soup, move towards it,
+     * build refinery, and deposit soup.
+     *
+     * @throws GameActionException
+     */
     static void minerExecute() throws GameActionException{
         updateCurrentLocation();
-        System.out.println(rc.getSoupCarrying());
         if (soupLocation != null) {
             //add Sense soup while moving
             Direction soupDirection = currentLocation.directionTo(soupLocation);
             if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
-                System.out.println("Going to refine soup");
+                System.out.println("Going to refine my maxed soup");
                 MapLocation refineryLocation = findNearestRefinery();
                 moveToRefineSoup(refineryLocation);
             }
@@ -73,7 +90,13 @@ public strictfp class Miner {
             }
         }
     }
-
+    
+    /**
+     * Changes the primary soup location to be the max soup found adjacent to the miner,
+     * if none found, make it the nextSoupLocation.
+     *
+     * @throws GameActionException
+     */
     static void updatePrimarySoupLocation() throws GameActionException{
         soupLocation = senseMaxSoupInRadius(1);
         if (soupLocation == null){
@@ -83,11 +106,16 @@ public strictfp class Miner {
         }
     }
 
-    static MapLocation findNearestRefinery() throws GameActionException{
+    /**
+     * looks for nearest refinery in search radius.
+     * 
+     * @return nearest refinery if found, otherwise null
+     */
+    static MapLocation findNearestRefinery(){
         updateCurrentLocation();
         RobotInfo[] allRobots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(),rc.getTeam());
         int nearestDist = 64*64*2;
-        MapLocation nearest = null;
+        MapLocation nearest = nearestRefineryLocation;
         for (RobotInfo rob: allRobots){
             if (rob.getType().equals(RobotType.REFINERY) &&
                     currentLocation.distanceSquaredTo(rob.getLocation()) < nearestDist){
@@ -98,28 +126,28 @@ public strictfp class Miner {
         return nearest;
     }
 
+    /**
+     * Moves to refinery or HQ to refine soup, then refines soup.
+     *
+     * @param ml MapLocation of the nearest refinery
+     */
     static void moveToRefineSoup(MapLocation ml) throws GameActionException {
         updateCurrentLocation();
-        if (ml != null && !onWay){
+        if (ml != null && !onWayToHq && currentLocation.distanceSquaredTo(ml) < maxDistanceToRefinery){
             Direction refineryDir = currentLocation.directionTo(ml);
             if (!tryRefineSoupAt(refineryDir)){
                 tryMoveInGeneralDirection(refineryDir, 7);
             }
-        } else if(nearestRefineryLocation != null && !onWay){
-            Direction refineryDir = currentLocation.directionTo(nearestRefineryLocation);
-            if (!tryRefineSoupAt(refineryDir)){
-                tryMoveInGeneralDirection(refineryDir, 7);
-            }
-        } else {
+        } else if(currentLocation.distanceSquaredTo(HQ_location) < maxDistanceToRefinery){
             int distanceToHQ = Math.abs(currentLocation.x - HQ_location.x) + Math.abs(currentLocation.y - HQ_location.y);
             float travelRate = 1 + rc.sensePollution(currentLocation)/2000;
             if ((int)(distanceToHQ * travelRate) < RobotType.REFINERY.cost - rc.getTeamSoup()) {
-                onWay = true;
+                onWayToHq = true;
             }
-            if (onWay){
+            if (onWayToHq){
                 Direction hqDir = currentLocation.directionTo(HQ_location);
                 if (tryRefineSoupAt(hqDir)){
-                    onWay = false;
+                    onWayToHq = false;
                 } else {
                     tryMoveInGeneralDirection(hqDir, 7);
                 }
@@ -127,13 +155,22 @@ public strictfp class Miner {
         }
     }
 
+    /**
+     * Should miner build refinery based on nearest refinery location
+     *
+     */
     static boolean shouldBuildRefinery(){
-        if (nearestRefineryLocation != null && currentLocation.distanceSquaredTo(nearestRefineryLocation) < 64) {
+        if (nearestRefineryLocation != null &&
+                currentLocation.distanceSquaredTo(nearestRefineryLocation) < maxDistanceToRefinery) {
             return false;
         }
         return true;
     }
 
+    /**
+     * If too close to HQ move away, otherwise build refinery in opposite direction of HQ if possible.
+     *
+     */
     static void buildRefinery() throws GameActionException{
         boolean refineryNearby = checkIfRefineryNearby();
         int distanceSquareToHQ = currentLocation.distanceSquaredTo(HQ_location);
@@ -146,6 +183,10 @@ public strictfp class Miner {
         }
     }
 
+    /**
+     * Quick search to see if refineries are in nearby search radius
+     *
+     */
     static boolean checkIfRefineryNearby() throws GameActionException{
         RobotInfo[] allrobots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(),rc.getTeam());
         for (RobotInfo rob: allrobots){
@@ -156,6 +197,10 @@ public strictfp class Miner {
         return false;
     }
 
+    /**
+     * looks for soup in outer sensor radius and changes the next soup location to be the on with most soup
+     *
+     */
     static void findNextSoupLocation() throws GameActionException {
         MapLocation nextPotentialLoc = senseSoupInOuterRadius();
         if (nextSoupLocation != null && rc.canSenseLocation(nextSoupLocation)){
@@ -178,6 +223,10 @@ public strictfp class Miner {
         return false;
     }
 
+    /**
+     * Search for soup by moving in the initialSearchDirection and sensing soup in outer sensor radius.
+     *
+     */
     static void searchForSoup() throws GameActionException{
         if (rotationCount == 2){
             turnRight = !turnRight;
@@ -191,6 +240,14 @@ public strictfp class Miner {
         }
     }
 
+    /**
+     * Try to build a given robot type in the given direction, trying all direction except the one opposite to given
+     * direction
+     *
+     * @param rt the RobotType to build
+     * @param dir the direction to first try building in
+     * @return true if built successfully else false
+     */
     static boolean tryBuildRobotInGeneralDirection(RobotType rt, Direction dir) throws GameActionException {
         if (rc.canBuildRobot(rt,dir)){
             rc.buildRobot(rt,dir);
@@ -224,6 +281,11 @@ public strictfp class Miner {
         return false;
     }
 
+    /**
+     * Sense soup in the entire current radius of the miner
+     *
+     * @return the location of the most soup, otherwise null
+     */
     static MapLocation senseMaxSoupInRadius(int rSquared) throws GameActionException{
         updateCurrentLocation();
         rSquared = Math.min(rc.getCurrentSensorRadiusSquared(), rSquared);
@@ -245,6 +307,12 @@ public strictfp class Miner {
         return bestLocation;
     }
 
+    /**
+     * Try to move in the given direction for a certain distance, with set amount of times in can fail moving in the direction
+     *
+     * @param maxDistance the maximum distance to move in the initialSearchDirection
+     * @param maxTries the maximum number of tries given to consecutively fail moving in the initialSearchDirection
+     */
     static void moveInDirection(int maxDistance, int maxTries) throws GameActionException{
         if(!tryMoveInGeneralDirection(initialSearchDirection, 3)){
             directionMoveTries++;
@@ -266,6 +334,14 @@ public strictfp class Miner {
         }
     }
 
+    /**
+     * Try to move in the given direction, and if successful sense soup in the outer sensor radius of new location
+     * and update the next soup location to look for
+     *
+     * @param dr the direction to first move in
+     * @param angle the number of directions to try in an alternating fashion around the given direction
+     * @return true if moved successfully else false
+     */
     static boolean tryMoveInGeneralDirection(Direction dr, int angle) throws GameActionException{
         if (rc.isReady() && angle > 0){
             if (rc.canMove(dr)){
@@ -301,6 +377,11 @@ public strictfp class Miner {
         return false;
     }
 
+    /**
+     * Looking only in the outer sensor radius, sense soup.
+     *
+     * @return the location of most soup, otherwise null
+     */
     static MapLocation senseSoupInOuterRadius() throws GameActionException{
         updateCurrentLocation();
         int rSquared = rc.getCurrentSensorRadiusSquared();
