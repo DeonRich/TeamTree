@@ -8,6 +8,7 @@ public strictfp class RobotPlayer {
     static boolean initialized = true;
     static Integer[][] soupMap;
     static short builtMinersCount = 0;
+    static short builtDefLandscapers = 0;
     static Direction[] adjDirections = { Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST,
                                         Direction.NORTHEAST, Direction.NORTHWEST, Direction.SOUTHEAST, Direction.SOUTHWEST};
 
@@ -15,7 +16,6 @@ public strictfp class RobotPlayer {
     public static void run(RobotController rc) throws GameActionException {
         RobotPlayer.rc = rc;
         soupMap = new Integer[rc.getMapHeight()][rc.getMapWidth()];
-
         while (true) {
             try {
                 // Here, we've separated the controls into a different method for each RobotType.
@@ -54,6 +54,8 @@ public strictfp class RobotPlayer {
 
     static void runMiner() throws GameActionException {
         Miner.runMiner(rc);
+        //tryBuildRobot(RobotType.DESIGN_SCHOOL,Direction.NORTHWEST);
+
     }
 
     static void runRefinery() throws GameActionException {
@@ -65,7 +67,11 @@ public strictfp class RobotPlayer {
     }
 
     static void runDesignSchool() throws GameActionException {
-
+        if (builtDefLandscapers <1) {
+            if(tryBuildRobot(RobotType.LANDSCAPER, Direction.SOUTHWEST)){
+                builtDefLandscapers++;
+            }
+        }
     }
 
     static void runFulfillmentCenter() throws GameActionException {
@@ -73,7 +79,7 @@ public strictfp class RobotPlayer {
     }
 
     static void runLandscaper() throws GameActionException {
-
+        DefeseLandscaper.runDefenseLandscaper(rc);
     }
 
     static void runDeliveryDrone() throws GameActionException {
