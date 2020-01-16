@@ -7,10 +7,13 @@ public strictfp class Miner {
     static boolean initialized = true;
     static boolean miningSoup = false;
     static boolean onWayToHq = false;
+    static boolean isBuildingDesignSchool = false;
+    static boolean designSchoolBuilt = false;
     static MapLocation soupLocation;
     static MapLocation nextSoupLocation;
     static MapLocation currentLocation;
     static MapLocation HQ_location;
+    static MapLocation designSchoolLocation;
     static MapLocation nearestRefineryLocation;
     static int nextSoupAmount = 0;
     static int directionMoveTries = 0;
@@ -44,6 +47,7 @@ public strictfp class Miner {
      */    
     static void minerInitialize() throws GameActionException{
         setHqLocation();
+        designSchoolLocation = HQ_location.add(Direction.NORTHWEST).add(Direction.NORTH);
         updateCurrentLocation();
         soupLocation = senseMaxSoupInRadius(rc.getCurrentSensorRadiusSquared());
         minerExecute();
@@ -57,7 +61,23 @@ public strictfp class Miner {
      */
     static void minerExecute() throws GameActionException{
         updateCurrentLocation();
-        if (soupLocation != null) {
+        shouldBuildDesignSchool();
+        if(isBuildingDesignSchool){
+            if(designSchoolBuilt){
+                isBuildingDesignSchool = false;
+            }else if(currentLocation.isAdjacentTo(designSchoolLocation)){
+                if(rc.canBuildRobot(RobotType.DESIGN_SCHOOL,currentLocation.directionTo(designSchoolLocation))){
+                    rc.buildRobot(RobotType.DESIGN_SCHOOL, currentLocation.directionTo(designSchoolLocation));
+                    isBuildingDesignSchool = false; designSchoolBuilt = true;
+                } else if (rc.senseRobotAtLocation(designSchoolLocation) != null
+                        && rc.senseRobotAtLocation(designSchoolLocation).getType() == RobotType.DESIGN_SCHOOL) {
+                    designSchoolBuilt = true; isBuildingDesignSchool = false;
+                }
+            } else{
+                tryMoveTo(designSchoolLocation,5);
+            }
+
+        } else if (soupLocation != null) {
             //add Sense soup while moving
             Direction soupDirection = currentLocation.directionTo(soupLocation);
             if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
@@ -423,6 +443,15 @@ public strictfp class Miner {
         return bestSoupLocation;
     }
 
+    static boolean tryMoveTo(MapLocation ml, int angle) throws GameActionException{
+        updateCurrentLocation();
+        if (currentLocation.equals(ml)){
+            return true;
+        }
+        tryMoveInGeneralDirection(currentLocation.directionTo(ml), angle);
+        return false;
+    }
+
     static void setHqLocation(){
         for (RobotInfo rob : rc.senseNearbyRobots()){
             if (rob.getType().equals(RobotType.HQ)){
@@ -433,5 +462,11 @@ public strictfp class Miner {
 
     static void updateCurrentLocation(){
         currentLocation = rc.getLocation();
+    }
+
+    static void shouldBuildDesignSchool(){
+        if(rc.getTeamSoup() > 300 && !designSchoolBuilt){
+            isBuildingDesignSchool = true;
+        }
     }
 }
